@@ -942,6 +942,8 @@ def main():
             # # Performance settings for faster-than-realtime rendering
             # "rendering_mode": "performance",  # Options: "performance", "balanced", "quality"
         }
+        if not args.headless:
+            app_launcher_flags["visualizer"] = ["kit"]
         app_launcher = AppLauncher(app_launcher_flags)
         simulation_app = app_launcher.app
         extra_simulator_params["simulation_app"] = simulation_app

@@ -92,10 +92,13 @@ def process_csv_file(
       2. Generator-native G1 format used by Kimodo and ARDY
          (has_header=False, has_frame_column=False):
          root_posX/Y/Z (m) | root_quat_w/x/y/z | joint_dofs (rad)
+      3. LAFAN1 retargeted G1 format (has_header=False, has_frame_column=False):
+         root_posX/Y/Z (m) | root_quat_x/y/z/w | joint_dofs (rad)
 
     Args:
         pos_units: "cm" or "m" for root position units.
-        rot_format: "euler_deg" (3 cols, Euler degrees) or "quat_wxyz" (4 cols, wxyz quaternion).
+        rot_format: "euler_deg" (3 cols, Euler degrees), "quat_wxyz" (4 cols, wxyz
+            quaternion), or "quat_xyzw" (4 cols, xyzw quaternion).
         joint_units: "deg" or "rad" for joint angle units.
         has_header: Whether the CSV has a header row to skip.
         has_frame_column: Whether column 0 is a frame index to skip.
@@ -122,6 +125,10 @@ def process_csv_file(
         col += 3
     elif rot_format == "quat_wxyz":
         root_rot_wxyz = data[:, col : col + 4]
+        col += 4
+    elif rot_format == "quat_xyzw":
+        root_rot_xyzw = data[:, col : col + 4]
+        root_rot_wxyz = root_rot_xyzw[:, [3, 0, 1, 2]]
         col += 4
     else:
         raise ValueError(f"Unknown rot_format: {rot_format}")
@@ -229,7 +236,10 @@ def main(
     ),
     rot_format: str = typer.Option(
         "euler_deg",
-        help="Root rotation format: 'euler_deg' (3 cols) or 'quat_wxyz' (4 cols).",
+        help=(
+            "Root rotation format: 'euler_deg' (3 cols), 'quat_wxyz' (4 cols), "
+            "or 'quat_xyzw' (4 cols)."
+        ),
     ),
     joint_units: str = typer.Option(
         "deg", help="Joint angle units in CSV: 'deg' or 'rad'."

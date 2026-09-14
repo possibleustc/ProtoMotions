@@ -19,6 +19,7 @@ exps/*
 wandb/*
 newton_source/*
 data/amass/*.pkl
+data/LAFAN1_Retargeting_Dataset/
 .claude/*
 !.claude/commands/
 .cursor/
