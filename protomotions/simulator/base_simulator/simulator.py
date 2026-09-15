@@ -138,6 +138,15 @@ class Simulator(RecordingMixin, ABC):
         self._num_dof: int = self.robot_config.kinematic_info.num_dofs
         self._dof_names: List[str] = self.robot_config.kinematic_info.dof_names
         self._body_names: List[str] = self.robot_config.kinematic_info.body_names
+        actuated_dof_indices = list(
+            getattr(self.robot_config, "actuated_dof_indices", range(self._num_dof))
+        )
+        self._actuated_dof_indices = torch.tensor(
+            actuated_dof_indices, device=self.device, dtype=torch.long
+        )
+        self._all_dofs_actuated_in_order = actuated_dof_indices == list(
+            range(self._num_dof)
+        )
         # Joint limits are now parsed from MJCF by pose_lib.py
         # Simulator-specific limits are only retrieved for verification via _get_simulator_dof_limits_for_verification()
 
@@ -699,6 +708,11 @@ class Simulator(RecordingMixin, ABC):
             markers_callback (Callable): Optional callback function that returns marker states.
                                         Called after physics step but before rendering.
         """
+        expected_shape = (self.num_envs, self.robot_config.number_of_actions)
+        if common_actions.shape != expected_shape:
+            raise ValueError(
+                f"Expected actions with shape {expected_shape}, got {tuple(common_actions.shape)}"
+            )
         # Store the action history (two-step buffer for acceleration clamp)
         self._prev_prev_actions = self._previous_actions.clone()
         self._previous_actions = self._common_actions.clone()
@@ -1280,6 +1294,18 @@ class Simulator(RecordingMixin, ABC):
         """
         raise NotImplementedError
 
+    def _expand_actions_to_dofs(self, actions: torch.Tensor) -> torch.Tensor:
+        """Scatter policy-ordered actions into physical common-order DOFs.
+
+        Passive slots stay zero. Their gains/effort limits are also zero, so PD
+        targets in those slots cannot lock a freely rotating wheel.
+        """
+        if self._all_dofs_actuated_in_order:
+            return actions
+        targets = actions.new_zeros((self.num_envs, self._num_dof))
+        targets[:, self._actuated_dof_indices] = actions
+        return targets
+
     def _apply_control(self) -> None:
         """
         Apply control based on control type.
@@ -1292,7 +1318,7 @@ class Simulator(RecordingMixin, ABC):
         from _physics_step() instead of branching on control_type themselves.
         """
         if self.control_type == ControlType.BUILT_IN_PD:
-            targets = self._common_actions
+            targets = self._expand_actions_to_dofs(self._common_actions)
             if (
                 self._domain_randomization is not None
                 and "action_noise" in self._domain_randomization
@@ -1306,7 +1332,7 @@ class Simulator(RecordingMixin, ABC):
             self._apply_simulator_pd_targets(sim_targets)
 
         elif self.control_type == ControlType.PROPORTIONAL:
-            targets = self._common_actions
+            targets = self._expand_actions_to_dofs(self._common_actions)
             if (
                 self._domain_randomization is not None
                 and "action_noise" in self._domain_randomization
@@ -1330,7 +1356,7 @@ class Simulator(RecordingMixin, ABC):
             self._apply_simulator_torques(sim_torques)
 
         elif self.control_type == ControlType.TORQUE:
-            torques = self._common_actions
+            torques = self._expand_actions_to_dofs(self._common_actions)
 
             if (
                 self._domain_randomization is not None
@@ -1361,19 +1387,19 @@ class Simulator(RecordingMixin, ABC):
 
         # Initialize tensors
         p_gains = torch.zeros(
-            self.robot_config.number_of_actions,
+            self._num_dof,
             dtype=torch.float,
             device=self.device,
             requires_grad=False,
         )
         d_gains = torch.zeros(
-            self.robot_config.number_of_actions,
+            self._num_dof,
             dtype=torch.float,
             device=self.device,
             requires_grad=False,
         )
         dof_effort_limits = torch.ones(
-            self.robot_config.number_of_actions,
+            self._num_dof,
             dtype=torch.float,
             device=self.device,
             requires_grad=False,
@@ -1445,6 +1471,8 @@ class Simulator(RecordingMixin, ABC):
             domain_randomization.dof_names,
             domain_randomization.dof_indices,
         )
+        active = set(self._actuated_dof_indices.tolist())
+        dof_indices = [index for index in dof_indices if index in active]
         num_matching_dofs = len(dof_indices)
         action_noise = (
             torch.rand(self.num_envs, num_matching_dofs, device=self.device)

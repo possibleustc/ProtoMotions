@@ -162,7 +162,7 @@ class NewtonSimulator(Simulator):
             zeros = torch.zeros(
                 self.num_envs,
                 1,
-                self.robot_config.number_of_actions,
+                self._num_dof,
                 device=self.device,
                 dtype=torch.float32,
             )
@@ -253,7 +253,7 @@ class NewtonSimulator(Simulator):
         # Compute projectile joint_q/joint_qd offsets per world.
         # Per-world joint_q layout:
         #   [robot_free(7), robot_dofs(N), proj_0_free(7), ..., proj_{P-1}_free(7)]
-        num_dofs = self.robot_config.number_of_actions
+        num_dofs = self._num_dof
         is_floating = not self.robot_config.asset.fix_base_link
         self._proj_jq_offset = (7 if is_floating else 0) + num_dofs
         self._proj_jqd_offset = (6 if is_floating else 0) + num_dofs
@@ -425,7 +425,7 @@ class NewtonSimulator(Simulator):
 
     def _setup_explicit_pd_arrays(self) -> None:
         """Setup persistent Warp arrays for explicit PD control."""
-        num_dofs = self.robot_config.number_of_actions
+        num_dofs = self._num_dof
         self._pd_num_dofs = num_dofs
 
         is_floating = not self.robot_config.asset.fix_base_link
@@ -780,22 +780,21 @@ class NewtonSimulator(Simulator):
 
     def _physics_step(self) -> None:
         """Performs a physics simulation step."""
-        # Update control targets before simulation
         if self.control_type == ControlType.BUILT_IN_PD:
             self._apply_control()
         elif self.control_type == ControlType.PROPORTIONAL:
-            pd_tar = self._action_to_pd_targets(self._common_actions)
+            pd_targets = self._expand_actions_to_dofs(self._common_actions).clone()
             if (
                 self._domain_randomization is not None
                 and "action_noise" in self._domain_randomization
             ):
-                pd_tar[
+                pd_targets[
                     ..., self._domain_randomization["action_noise"]["dof_indices"]
                 ] += self._domain_randomization["action_noise"]["action_noise"]
-            sim_targets = pd_tar[:, self.data_conversion.dof_convert_to_sim]
+            sim_targets = pd_targets[:, self.data_conversion.dof_convert_to_sim]
             self._update_pd_targets(sim_targets)
         elif self.control_type == ControlType.TORQUE:
-            torques = self._action_to_torque_targets(self._common_actions)
+            torques = self._expand_actions_to_dofs(self._common_actions).clone()
             if (
                 self._domain_randomization is not None
                 and "action_noise" in self._domain_randomization

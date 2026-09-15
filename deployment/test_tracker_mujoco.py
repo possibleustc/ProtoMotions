@@ -469,6 +469,7 @@ def run(
     root_body_index   = robot_meta["root_body_index"]
     num_bodies        = robot_meta["num_bodies"]
     num_dofs          = robot_meta["num_dofs"]
+    num_actions       = robot_meta.get("num_actions", num_dofs)
     mjcf_path         = robot_meta["mjcf_path"]
     control_dt        = timing["control_dt"]
     decimation        = timing["decimation"]
@@ -728,6 +729,7 @@ def run(
                 onnx_name_to_key=onnx_name_to_key,
                 anchor_body_index=anchor_body_index,
                 num_dofs=num_dofs,
+                num_actions=num_actions,
                 prev_actions=prev_actions,
                 odom_start_xy=alignment.odom_start_xy
                 if requirements.odom_start_xy

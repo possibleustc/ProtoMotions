@@ -122,6 +122,17 @@ import numpy as np
 import torch
 from torch import Tensor
 
+
+def _actuated_dof_indices(robot_config):
+    return list(
+        getattr(
+            robot_config,
+            "actuated_dof_indices",
+            range(len(robot_config.kinematic_info.dof_names)),
+        )
+    )
+
+
 ActionTransform = Literal["clamp", "tanh", None]
 
 
@@ -298,7 +309,10 @@ def make_pd_action_config(
         torch.device("cpu"),
     )
 
-    joint_names = robot_config.kinematic_info.dof_names
+    indices = _actuated_dof_indices(robot_config)
+    pd_action_offset = pd_action_offset[indices]
+    pd_action_scale = pd_action_scale[indices]
+    joint_names = [robot_config.kinematic_info.dof_names[i] for i in indices]
     stiffness = torch.tensor(
         [robot_config.control.control_info[j].stiffness for j in joint_names],
         dtype=torch.float32,
@@ -374,7 +388,8 @@ def make_bm_pd_action_config(robot_config) -> Dict[str, Any]:
     Example:
         action_config = make_bm_pd_action_config(robot_cfg)
     """
-    joint_names = robot_config.kinematic_info.dof_names
+    indices = _actuated_dof_indices(robot_config)
+    joint_names = [robot_config.kinematic_info.dof_names[i] for i in indices]
     stiffness = torch.tensor(
         [robot_config.control.control_info[j].stiffness for j in joint_names],
         dtype=torch.float32,
@@ -393,7 +408,7 @@ def make_bm_pd_action_config(robot_config) -> Dict[str, Any]:
 
     action_scale = effort_limit / stiffness
 
-    pd_action_offset = robot_config.default_dof_pos.clone()
+    pd_action_offset = robot_config.default_dof_pos[indices].clone()
 
     return {
         "fn": bm_pd_action,
@@ -419,7 +434,10 @@ def make_passthrough_pd_action_config(robot_config) -> Dict[str, Any]:
     Example:
         action_config = make_passthrough_pd_action_config(robot_cfg)
     """
-    joint_names = robot_config.kinematic_info.dof_names
+    joint_names = [
+        robot_config.kinematic_info.dof_names[i]
+        for i in _actuated_dof_indices(robot_config)
+    ]
     stiffness = torch.tensor(
         [robot_config.control.control_info[j].stiffness for j in joint_names],
         dtype=torch.float32,

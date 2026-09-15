@@ -147,6 +147,7 @@ class MockContext:
         num_future_steps: int,
         anchor_idx: int,
         history_steps: int = 1,
+        num_actions: int = None,
     ):
         import torch
 
@@ -154,7 +155,9 @@ class MockContext:
         self.mimic   = _MockMimic(
             num_envs, num_future_steps, num_dofs, num_bodies, anchor_idx
         )
-        self.historical = _MockHistorical(num_envs, history_steps, num_dofs)
+        self.historical = _MockHistorical(
+            num_envs, history_steps, num_dofs if num_actions is None else num_actions
+        )
         # Raw odometer sensor fields. The heading-local offset to the reference
         # (formerly odom_offset_local_*) is derived on demand inside the graph by
         # compute_odom_offset_local, consumed by odom_offset_factory and
@@ -247,6 +250,11 @@ def export_tracker(
     num_bodies = len(robot_config.kinematic_info.body_names)
     body_names = list(robot_config.kinematic_info.body_names)
     joint_names = list(robot_config.kinematic_info.dof_names)
+    active_indices = getattr(
+        robot_config, "actuated_dof_indices", range(len(joint_names))
+    )
+    actuated_joint_names = [joint_names[i] for i in active_indices]
+    num_actions = robot_config.number_of_actions
     anchor_body_name = robot_config.anchor_body_name
     anchor_body_index = robot_config.anchor_body_index
     root_body_index = 0  # pelvis is always first body
@@ -302,7 +310,7 @@ def export_tracker(
             pd_target_max_accel = float(_accel)
 
     log.info(
-        f"Robot: {num_dofs} DOFs, {num_bodies} bodies, "
+        f"Robot: {num_dofs} physical DOFs, {num_actions} actions, {num_bodies} bodies, "
         f"anchor={anchor_body_name}(idx={anchor_body_index})"
     )
     log.info(
@@ -321,6 +329,7 @@ def export_tracker(
         num_future_steps=num_future_steps,
         anchor_idx=anchor_body_index,
         history_steps=history_steps,
+        num_actions=num_actions,
     )
 
     # ------------------------------------------------------------------
@@ -528,10 +537,10 @@ def export_tracker(
     # 13. Build and write rich YAML metadata
     # ------------------------------------------------------------------
     stiffness_vals = [
-        float(robot_config.control.control_info[j].stiffness) for j in joint_names
+        float(robot_config.control.control_info[j].stiffness) for j in actuated_joint_names
     ]
     damping_vals = [
-        float(robot_config.control.control_info[j].damping) for j in joint_names
+        float(robot_config.control.control_info[j].damping) for j in actuated_joint_names
     ]
 
     # Effort limits. ControlInfo.effort_limit, not .effort -- the wrong name
@@ -542,7 +551,7 @@ def export_tracker(
     try:
         effort_limits = [
             float(robot_config.control.control_info[j].effort_limit)
-            for j in joint_names
+            for j in actuated_joint_names
         ]
     except (AttributeError, KeyError, TypeError):
         pass
@@ -583,6 +592,7 @@ def export_tracker(
         obs_input_keys=obs_input_keys,
         actor_obs_configs=actor_obs_configs,
         joint_names=joint_names,
+        actuated_joint_names=actuated_joint_names,
         body_names=body_names,
         stiffness=stiffness_vals,
         damping=damping_vals,
@@ -595,6 +605,7 @@ def export_tracker(
         root_body_index=root_body_index,
         num_bodies=num_bodies,
         num_dofs=num_dofs,
+        num_actions=num_actions,
         mjcf_path=mjcf_path,
         control_dt=control_dt,
         physics_dt=physics_dt,
@@ -628,6 +639,7 @@ def _build_yaml(
     obs_input_keys,
     actor_obs_configs,
     joint_names,
+    actuated_joint_names,
     body_names,
     stiffness,
     damping,
@@ -640,6 +652,7 @@ def _build_yaml(
     root_body_index,
     num_bodies,
     num_dofs,
+    num_actions,
     mjcf_path,
     control_dt,
     physics_dt,
@@ -802,16 +815,16 @@ def _build_yaml(
     # Build output descriptors
     policy_outputs = [
         {"name": "actions", "kind": "actions", "key": "actions",
-         "shape": [1, num_dofs]},
+         "shape": [1, num_actions]},
         {"name": "joint_pos_targets", "kind": "joint_pos_targets",
-         "key": "joint_pos_targets", "shape": [1, num_dofs],
-         "joint_names": joint_names},
+         "key": "joint_pos_targets", "shape": [1, num_actions],
+         "joint_names": actuated_joint_names},
         {"name": "stiffness_targets", "kind": "stiffness_targets",
-         "key": "stiffness_targets", "shape": [1, num_dofs],
-         "joint_names": joint_names},
+         "key": "stiffness_targets", "shape": [1, num_actions],
+         "joint_names": actuated_joint_names},
         {"name": "damping_targets", "kind": "damping_targets",
-         "key": "damping_targets", "shape": [1, num_dofs],
-         "joint_names": joint_names},
+         "key": "damping_targets", "shape": [1, num_actions],
+         "joint_names": actuated_joint_names},
     ]
 
     # Passthrough keys: obs_input_keys that aren't ONNX inputs
@@ -824,7 +837,7 @@ def _build_yaml(
     content = {
         "type": "unified_pipeline",
         "dt": control_dt,
-        "joint_names": joint_names,
+        "joint_names": actuated_joint_names,
         "body_names": body_names,
         "default_joint_stiffness": stiffness,
         "default_joint_damping": damping,
@@ -846,12 +859,14 @@ def _build_yaml(
             "mjcf_path": mjcf_path,
             "num_bodies": num_bodies,
             "num_dofs": num_dofs,
+            "num_actions": num_actions,
             "anchor_body_name": anchor_body_name,
             "anchor_body_index": anchor_body_index,
             "root_body_name": body_names[root_body_index],
             "root_body_index": root_body_index,
             "body_names": body_names,
             "joint_names": joint_names,
+            "actuated_joint_names": actuated_joint_names,
         },
         "control": {
             "stiffness": stiffness,

@@ -146,7 +146,7 @@ def agent_config(
 
     # For path following with AMP: actor/critic get path obs, discriminator uses historical body state
     actor_config = PPOActorConfig(
-        num_out=robot_config.kinematic_info.num_dofs,
+        num_out=robot_config.number_of_actions,
         actor_logstd=-2.9,
         in_keys=["max_coords_obs", "path", "historical_max_coords_obs"],
         mu_key="actor_trunk_out",

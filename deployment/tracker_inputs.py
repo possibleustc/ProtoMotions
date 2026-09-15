@@ -164,6 +164,7 @@ def build_tracker_onnx_inputs(
     future_refs: dict,
     anchor_body_index: int,
     num_dofs: int,
+    num_actions: Optional[int] = None,
     prev_actions: Optional[np.ndarray] = None,
     odom_start_xy: Optional[np.ndarray] = None,
     odom_disp_start: Optional[np.ndarray] = None,
@@ -173,7 +174,9 @@ def build_tracker_onnx_inputs(
 ) -> dict[str, np.ndarray]:
     """Assemble actual ONNX input arrays from semantic deploy tensors."""
     if prev_actions is None:
-        prev_actions = np.zeros(num_dofs, dtype=np.float32)
+        prev_actions = np.zeros(
+            num_dofs if num_actions is None else num_actions, dtype=np.float32
+        )
 
     key_to_array = {
         "current.dof_pos": dof_pos[None],

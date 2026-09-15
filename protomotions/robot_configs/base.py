@@ -143,9 +143,9 @@ class ControlConfig:
                     override_control_info[key] = value
             self.override_control_info = override_control_info
 
-    def initialize_control_info(self, asset: RobotAssetConfig):
+    def initialize_control_info(self, asset: RobotAssetConfig, force: bool = False):
         """Initialize control info from asset configuration."""
-        if not hasattr(self, "control_info"):
+        if force or not hasattr(self, "control_info"):
             from protomotions.components.pose_lib import extract_control_info
 
             self.control_info = extract_control_info(
@@ -228,6 +228,10 @@ class RobotConfig:
     contact_pairs_multiplier: int = 16
     control: ControlConfig = field(default_factory=ControlConfig)
 
+    # Policy action order. None preserves the all-DOF convention for existing robots.
+    # Kinematics, reset poses and simulator state always include passive DOFs.
+    actuated_dof_names: Optional[List[str]] = None
+
     # The following fields are loaded post-init and populated from the MJCF asset
     # Note: Using Field(init=False) to exclude from __init__ signature
     kinematic_info: KinematicInfo = field(init=False)
@@ -266,7 +270,7 @@ class RobotConfig:
         # Initialize control info in the control config
         self.control.initialize_control_info(self.asset)
 
-        self.number_of_actions = self.kinematic_info.num_dofs
+        self._resolve_actuated_dofs()
 
         # Initialize default_dof_pos: use provided values or zeros
         if self.default_dof_pos is None:
@@ -313,6 +317,39 @@ class RobotConfig:
                 name in self.common_naming_to_robot_body_names.keys()
             ), f"RobotConfig.common_naming_to_robot_body_names must contain {name}"
 
+    @property
+    def actuated_dof_indices(self) -> List[int]:
+        """Physical (common-order) DOF indices in policy action order."""
+        names = self.actuated_dof_names
+        if names is None:
+            return list(range(self.kinematic_info.num_dofs))
+        return [self.kinematic_info.dof_names.index(name) for name in names]
+
+    @property
+    def passive_dof_indices(self) -> List[int]:
+        active = set(self.actuated_dof_indices)
+        return [i for i in range(self.kinematic_info.num_dofs) if i not in active]
+
+    def _resolve_actuated_dofs(self) -> None:
+        names = self.actuated_dof_names
+        if names is not None:
+            if len(names) != len(set(names)):
+                raise ValueError("actuated_dof_names must not contain duplicates")
+            unknown = set(names) - set(self.kinematic_info.dof_names)
+            if unknown:
+                raise ValueError(f"Unknown actuated DOFs: {sorted(unknown)}")
+        self.number_of_actions = len(self.actuated_dof_indices)
+        # Backends consume physical-size control arrays. Never drive passive joints,
+        # even if the asset or a broad control-info override supplied PD gains.
+        for index in self.passive_dof_indices:
+            info = self.control.control_info[self.kinematic_info.dof_names[index]]
+            info.stiffness = 0.0
+            info.damping = 0.0
+            info.armature = 0.0
+            info.friction = 0.0
+            info.effort_limit = 0.0
+            info.velocity_limit = 1000.0
+
     def _normalize_semantic_forward_axis_xy(self) -> None:
         """Validate and normalize the declared anatomical forward axis."""
         if self.semantic_forward_axis_xy is None:
@@ -358,6 +395,10 @@ class RobotConfig:
 
         if "semantic_forward_axis_xy" in kwargs:
             self._normalize_semantic_forward_axis_xy()
+
+        if "actuated_dof_names" in kwargs or "control" in kwargs:
+            self.control.initialize_control_info(self.asset, force=True)
+            self._resolve_actuated_dofs()
 
         # Reprocess fields that depend on the updated values
         self.mimic_small_marker_bodies = abstract_names_to_body_names(

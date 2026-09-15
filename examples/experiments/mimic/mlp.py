@@ -124,7 +124,7 @@ def agent_config(
     )
 
     actor_config = PPOActorConfig(
-        num_out=robot_config.kinematic_info.num_dofs,
+        num_out=robot_config.number_of_actions,
         actor_logstd=-2.9,
         in_keys=["max_coords_obs", "mimic_target_poses", "previous_actions"],
         mu_key="actor_trunk_out",

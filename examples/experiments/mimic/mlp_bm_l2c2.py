@@ -223,7 +223,7 @@ def agent_config(
 
     # Actor configuration — obs normalization ON, learnable std from -2.9
     actor_config = PPOActorConfig(
-        num_out=robot_config.kinematic_info.num_dofs,
+        num_out=robot_config.number_of_actions,
         actor_logstd=-2.9,
         learnable_std=True,
         in_keys=[

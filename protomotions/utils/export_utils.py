@@ -738,13 +738,17 @@ def _generate_yaml_content(
     damping: list,
     anchor_body: str = "pelvis",
     dt: Optional[float] = None,
+    physical_joint_names: Optional[list] = None,
 ) -> Dict[str, Any]:
     """Generate the complete YAML content for isaac-deploy."""
+    # State inputs may include passive joints even though policy outputs do not.
+    input_joint_names = physical_joint_names or joint_names
+
     # Build policy inputs.
     policy_inputs = []
     for onnx_name in onnx_in_names:
         entry = _build_policy_input(
-            onnx_name, input_shapes, joint_names, body_names, anchor_body
+            onnx_name, input_shapes, input_joint_names, body_names, anchor_body
         )
         if entry:
             policy_inputs.append(entry)
@@ -767,6 +771,8 @@ def _generate_yaml_content(
         "policy_inputs": policy_inputs,
         "policy_outputs": policy_outputs,
     }
+    if input_joint_names != joint_names:
+        content["physical_joint_names"] = input_joint_names
     if dt is not None:
         # Insert dt right after type for readability
         ordered = {"type": content.pop("type"), "dt": dt}
@@ -822,7 +828,11 @@ def export_unified_pipeline(
     passthrough_obs = passthrough_obs or {}
 
     # Extract robot metadata.
-    joint_names = robot_config.kinematic_info.dof_names
+    physical_joint_names = robot_config.kinematic_info.dof_names
+    active_indices = getattr(
+        robot_config, "actuated_dof_indices", range(len(physical_joint_names))
+    )
+    joint_names = [physical_joint_names[i] for i in active_indices]
     body_names = robot_config.kinematic_info.body_names
     stiffness = [
         float(robot_config.control.control_info[j].stiffness) for j in joint_names
@@ -985,6 +995,7 @@ def export_unified_pipeline(
         damping=damping,
         anchor_body=anchor_body,
         dt=dt,
+        physical_joint_names=physical_joint_names,
     )
 
     # Add runtime metadata for visualization/testing (not used by isaac-deploy).

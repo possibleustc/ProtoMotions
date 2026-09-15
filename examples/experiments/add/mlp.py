@@ -78,7 +78,7 @@ def agent_config(
     from protomotions.envs.component_factories import gt_error_factory, gr_error_factory, max_joint_error_factory
 
     actor_config = PPOActorConfig(
-        num_out=robot_config.kinematic_info.num_dofs,
+        num_out=robot_config.number_of_actions,
         actor_logstd=-2.9,
         in_keys=["max_coords_obs", "mimic_target_poses"],
         mu_key="actor_trunk_out",

@@ -226,6 +226,11 @@ def export_tracker(
     num_bodies = len(robot_config.kinematic_info.body_names)
     body_names = list(robot_config.kinematic_info.body_names)
     joint_names = list(robot_config.kinematic_info.dof_names)
+    active_indices = getattr(
+        robot_config, "actuated_dof_indices", range(len(joint_names))
+    )
+    actuated_joint_names = [joint_names[i] for i in active_indices]
+    num_actions = robot_config.number_of_actions
     anchor_body_name = robot_config.anchor_body_name
     anchor_body_index = robot_config.anchor_body_index
     root_body_index = 0  # pelvis is always first body
@@ -279,7 +284,7 @@ def export_tracker(
             pd_target_max_accel = float(_accel)
 
     log.info(
-        f"Robot: {num_dofs} DOFs, {num_bodies} bodies, "
+        f"Robot: {num_dofs} physical DOFs, {num_actions} actions, {num_bodies} bodies, "
         f"anchor={anchor_body_name}(idx={anchor_body_index})"
     )
     log.info(
@@ -492,10 +497,10 @@ def export_tracker(
     # 12. Build and write rich YAML metadata
     # ------------------------------------------------------------------
     stiffness_vals = [
-        float(robot_config.control.control_info[j].stiffness) for j in joint_names
+        float(robot_config.control.control_info[j].stiffness) for j in actuated_joint_names
     ]
     damping_vals = [
-        float(robot_config.control.control_info[j].damping) for j in joint_names
+        float(robot_config.control.control_info[j].damping) for j in actuated_joint_names
     ]
     mjcf_path = robot_config.asset.asset_file_name
 
@@ -515,6 +520,7 @@ def export_tracker(
         onnx_name_to_key=onnx_name_to_key,
         input_shapes=input_shapes,
         joint_names=joint_names,
+        actuated_joint_names=actuated_joint_names,
         body_names=body_names,
         stiffness=stiffness_vals,
         damping=damping_vals,
@@ -524,6 +530,7 @@ def export_tracker(
         root_body_index=root_body_index,
         num_bodies=num_bodies,
         num_dofs=num_dofs,
+        num_actions=num_actions,
         mjcf_path=mjcf_path,
         control_dt=control_dt,
         physics_dt=physics_dt,
@@ -555,6 +562,7 @@ def _build_yaml(
     onnx_name_to_key,
     input_shapes,
     joint_names,
+    actuated_joint_names,
     body_names,
     stiffness,
     damping,
@@ -564,6 +572,7 @@ def _build_yaml(
     root_body_index,
     num_bodies,
     num_dofs,
+    num_actions,
     mjcf_path,
     control_dt,
     physics_dt,
@@ -667,12 +676,14 @@ def _build_yaml(
             "mjcf_path": mjcf_path,
             "num_bodies": num_bodies,
             "num_dofs": num_dofs,
+            "num_actions": num_actions,
             "anchor_body_name": anchor_body_name,
             "anchor_body_index": anchor_body_index,
             "root_body_name": body_names[root_body_index],
             "root_body_index": root_body_index,
             "body_names": body_names,
             "joint_names": joint_names,
+            "actuated_joint_names": actuated_joint_names,
         },
         # Control parameters baked into the ONNX model
         "control": {

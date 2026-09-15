@@ -85,7 +85,7 @@ class MujocoSimulator(Simulator):
         self._kd = None  # [num_dofs] damping in common DOF order
         self._effort_limits = None  # [num_dofs] torque limits in common DOF order
         self._last_applied_torques = None  # Track for _get_simulator_dof_forces
-        self._dof_to_actuator = None  # Mapping: sim DOF index -> actuator index
+        self._actuator_to_dof = None  # Mapping: actuator index -> physical sim DOF
 
         # Explicit PD mode state (used when use_implicit_pd=False)
         self._kp_sim = None  # PD gains reordered to sim DOF order
@@ -94,7 +94,6 @@ class MujocoSimulator(Simulator):
         self._pd_targets_sim = None  # Current PD targets in sim DOF order
 
         # Body/DOF indexing
-        self._num_actuated_dofs = self.robot_config.number_of_actions
         self._has_free_joint = not self.robot_config.asset.fix_base_link
 
         # Action EMA filter: a_applied = alpha * a_policy + (1 - alpha) * a_prev
@@ -325,23 +324,23 @@ class MujocoSimulator(Simulator):
             self._configure_explicit_pd()
 
         # Initialize torque tracking
-        self._last_applied_torques = np.zeros(self._num_actuated_dofs, dtype=np.float32)
+        self._last_applied_torques = np.zeros(self._num_dof, dtype=np.float32)
 
         # Run initial forward kinematics
         mujoco.mj_forward(self.model, self.data)
 
         # Compute projectile qpos/qvel indices
-        # Robot: free joint (7 qpos, 6 qvel) + actuated DOFs
+        # Robot: free joint (7 qpos, 6 qvel) + physical DOFs
         # Projectile i: free joint at qpos[start + i*7 : start + i*7 + 7]
         self._proj_qpos_start = (
-            7 + self._num_actuated_dofs
+            7 + self._num_dof
             if self._has_free_joint
-            else self._num_actuated_dofs
+            else self._num_dof
         )
         self._proj_qvel_start = (
-            6 + self._num_actuated_dofs
+            6 + self._num_dof
             if self._has_free_joint
-            else self._num_actuated_dofs
+            else self._num_dof
         )
 
         # Count robot bodies (exclude world body 0 and projectile bodies)
@@ -423,7 +422,7 @@ class MujocoSimulator(Simulator):
                 )
 
     def _build_actuator_mapping(self) -> None:
-        """Build mapping from sim DOF index to MuJoCo actuator index.
+        """Map each MuJoCo actuator to its physical simulator DOF.
 
         MuJoCo's data.ctrl is indexed by actuator order (from <actuator> section),
         NOT by DOF order. This mapping ensures torques go to the right actuator.
@@ -431,12 +430,14 @@ class MujocoSimulator(Simulator):
         dof_start = 6 if self._has_free_joint else 0  # skip free joint DOFs in qvel
 
         # Map: for each actuator, find which DOF it controls
-        actuator_to_dof = {}
+        actuator_to_dof = []
         for act_idx in range(self.model.nu):
             jnt_id = self.model.actuator_trnid[act_idx, 0]
             dof_addr = self.model.jnt_dofadr[jnt_id]
-            dof_idx = dof_addr - dof_start  # relative to actuated DOFs
-            actuator_to_dof[act_idx] = dof_idx
+            dof_idx = dof_addr - dof_start  # relative to physical robot DOFs
+            if not 0 <= dof_idx < self._num_dof:
+                raise ValueError(f"Actuator {act_idx} targets non-robot DOF {dof_idx}")
+            actuator_to_dof.append(dof_idx)
             act_name = (
                 mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, act_idx)
                 or f"act{act_idx}"
@@ -449,14 +450,11 @@ class MujocoSimulator(Simulator):
                 f"  Actuator[{act_idx}] '{act_name}' -> joint '{jnt_name}' -> DOF[{dof_idx}]"
             )
 
-        # Invert: for each DOF index, which actuator index controls it
-        self._dof_to_actuator = np.zeros(self._num_actuated_dofs, dtype=np.int32)
-        for act_idx, dof_idx in actuator_to_dof.items():
-            if 0 <= dof_idx < self._num_actuated_dofs:
-                self._dof_to_actuator[dof_idx] = act_idx
+        # Gather from physical targets: passive DOFs have no actuator entry.
+        self._actuator_to_dof = np.asarray(actuator_to_dof, dtype=np.int32)
 
         print(
-            f"  DOF-to-actuator mapping built ({self._num_actuated_dofs} DOFs -> {self.model.nu} actuators)"
+            f"  Actuator mapping built ({self._num_dof} physical DOFs -> {self.model.nu} actuators)"
         )
 
     def _setup_control_parameters(self) -> None:
@@ -587,11 +585,11 @@ class MujocoSimulator(Simulator):
             return
 
         if self._has_free_joint:
-            q = self.data.qpos[7:]
-            qd = self.data.qvel[6:]
+            q = self.data.qpos[7 : 7 + self._num_dof]
+            qd = self.data.qvel[6 : 6 + self._num_dof]
         else:
-            q = self.data.qpos[:]
-            qd = self.data.qvel[:]
+            q = self.data.qpos[: self._num_dof]
+            qd = self.data.qvel[: self._num_dof]
 
         torques = self._kp_sim * (self._pd_targets_sim - q) - self._kd_sim * qd
         torques = np.clip(torques, -self._effort_limits_sim, self._effort_limits_sim)
@@ -748,14 +746,14 @@ class MujocoSimulator(Simulator):
         if self._has_free_joint:
             self.data.qpos[0:3] = root_pos
             self.data.qpos[3:7] = root_rot  # wxyz
-            self.data.qpos[7 : 7 + self._num_actuated_dofs] = dof_pos
+            self.data.qpos[7 : 7 + self._num_dof] = dof_pos
 
             self.data.qvel[0:3] = root_vel
             self.data.qvel[3:6] = root_ang_vel
-            self.data.qvel[6 : 6 + self._num_actuated_dofs] = dof_vel
+            self.data.qvel[6 : 6 + self._num_dof] = dof_vel
         else:
-            self.data.qpos[: self._num_actuated_dofs] = dof_pos
-            self.data.qvel[: self._num_actuated_dofs] = dof_vel
+            self.data.qpos[: self._num_dof] = dof_pos
+            self.data.qvel[: self._num_dof] = dof_vel
 
         # Clear forces
         self.data.ctrl[:] = 0.0
@@ -766,7 +764,7 @@ class MujocoSimulator(Simulator):
 
     def _apply_torques_to_ctrl(self, torques_sim_order: np.ndarray) -> None:
         """Write torques (in sim DOF order) to data.ctrl (in actuator order)."""
-        self.data.ctrl[self._dof_to_actuator] = torques_sim_order
+        self.data.ctrl[:] = torques_sim_order[self._actuator_to_dof]
         self._last_applied_torques = torques_sim_order.copy()
 
     def _physics_step(self) -> None:
@@ -814,14 +812,14 @@ class MujocoSimulator(Simulator):
             root_pos = self.data.qpos[0:3]
             root_quat = self.data.qpos[3:7]
             root_vel = self.data.qvel[0:3]
-            dof_pos = self.data.qpos[7 : 7 + self._num_actuated_dofs]
-            dof_vel = self.data.qvel[6 : 6 + self._num_actuated_dofs]
+            dof_pos = self.data.qpos[7 : 7 + self._num_dof]
+            dof_vel = self.data.qvel[6 : 6 + self._num_dof]
         else:
             root_pos = np.zeros(3)
             root_quat = np.array([1, 0, 0, 0])
             root_vel = np.zeros(3)
-            dof_pos = self.data.qpos[: self._num_actuated_dofs]
-            dof_vel = self.data.qvel[: self._num_actuated_dofs]
+            dof_pos = self.data.qpos[: self._num_dof]
+            dof_vel = self.data.qvel[: self._num_dof]
 
         has_nan = np.any(np.isnan(self.data.qpos)) or np.any(np.isnan(self.data.qvel))
         max_pos = np.max(np.abs(dof_pos)) if len(dof_pos) > 0 else 0
@@ -900,13 +898,13 @@ class MujocoSimulator(Simulator):
     def _get_simulator_dof_state(
         self, env_ids: Optional[torch.Tensor] = None
     ) -> RobotState:
-        """Get DOF positions and velocities (actuated DOFs only)."""
+        """Get positions and velocities for all physical robot DOFs."""
         if self._has_free_joint:
-            dof_pos = self.data.qpos[7 : 7 + self._num_actuated_dofs].copy()
-            dof_vel = self.data.qvel[6 : 6 + self._num_actuated_dofs].copy()
+            dof_pos = self.data.qpos[7 : 7 + self._num_dof].copy()
+            dof_vel = self.data.qvel[6 : 6 + self._num_dof].copy()
         else:
-            dof_pos = self.data.qpos[: self._num_actuated_dofs].copy()
-            dof_vel = self.data.qvel[: self._num_actuated_dofs].copy()
+            dof_pos = self.data.qpos[: self._num_dof].copy()
+            dof_vel = self.data.qvel[: self._num_dof].copy()
 
         return RobotState(
             dof_pos=_to_torch_f32(dof_pos).unsqueeze(0),
@@ -930,10 +928,16 @@ class MujocoSimulator(Simulator):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Get DOF limits from MuJoCo model."""
         start_idx = 1 if self._has_free_joint else 0
-        jnt_range = self.model.jnt_range[start_idx:, :]
+        stop_idx = start_idx + self._num_dof
+        jnt_range = self.model.jnt_range[start_idx:stop_idx, :].copy()
+        # MuJoCo stores (0, 0) for unlimited hinges; pose_lib represents them
+        # with finite sentinels so tensors remain usable by generic code.
+        unlimited = self.model.jnt_limited[start_idx:stop_idx] == 0
+        jnt_range[unlimited, 0] = -1e10
+        jnt_range[unlimited, 1] = 1e10
 
-        lower_limits = _to_torch_f32(jnt_range[:, 0].copy())
-        upper_limits = _to_torch_f32(jnt_range[:, 1].copy())
+        lower_limits = _to_torch_f32(jnt_range[:, 0])
+        upper_limits = _to_torch_f32(jnt_range[:, 1])
 
         return lower_limits, upper_limits
 
@@ -1005,7 +1009,7 @@ class MujocoSimulator(Simulator):
 
         if getattr(self.config, "use_implicit_pd", True):
             # Implicit: write position targets to ctrl (MuJoCo handles PD)
-            self.data.ctrl[self._dof_to_actuator] = targets
+            self.data.ctrl[:] = targets[self._actuator_to_dof]
         else:
             # Explicit: cache targets, torques computed per-substep in _physics_step
             self._pd_targets_sim = targets.astype(np.float64)

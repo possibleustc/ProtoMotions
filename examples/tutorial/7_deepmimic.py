@@ -326,7 +326,7 @@ obs_keys = ["max_coords_obs", "mimic_target_poses"]
 # Actor configuration - maps observations to actions
 # Uses MLPWithConcatConfig: concatenates all observation keys and processes through MLP
 actor_config = PPOActorConfig(
-    num_out=robot_cfg.kinematic_info.num_dofs,
+    num_out=robot_cfg.number_of_actions,
     actor_logstd=-2.9,  # Initial log standard deviation for action noise
     in_keys=obs_keys,  # Observation keys to process
     mu_key="actor_trunk_out",  # Output key for the mean action
