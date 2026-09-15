@@ -47,8 +47,13 @@ class G1WheelRobotConfig(G1RobotConfig):
 
     def __post_init__(self):
         self.asset.asset_file_name = "mjcf/g1_wheel.xml"
-        # Preserve the thin cylindrical wheel collision geometry.
+        # Keep the wheel as one 24 mm cylinder and round its edges in PhysX.
         self.asset.replace_cylinder_with_capsule = False
+        self.asset.isaaclab_convex_margins = {
+            f"{side}_wheel_{i}_collision": 0.010
+            for side in ("left", "right")
+            for i in range(1, 5)
+        }
         for side in ("left", "right"):
             self.common_naming_to_robot_body_names[f"all_{side}_foot_bodies"] = [
                 f"{side}_ankle_roll_link",

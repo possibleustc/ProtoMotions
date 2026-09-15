@@ -103,6 +103,9 @@ class RobotAssetConfig:
     linear_damping: Optional[float] = None
     disable_gravity: Optional[bool] = None
     fix_base_link: Optional[bool] = None
+    # PhysX-only rounded edges for named cylinders. The USD core is shrunk so
+    # the rounded collision shape keeps the MJCF cylinder's outer dimensions.
+    isaaclab_convex_margins: Optional[Dict[str, float]] = None
 
     def __post_init__(self):
         """Validate that asset_file_name is set."""
@@ -113,6 +116,12 @@ class RobotAssetConfig:
                 f"must be a valid path to an .xml MJCF file to extract kinematic info. "
                 "if you are using URDF, convert it to MJCF first"
             )
+        for geom_name, margin in (self.isaaclab_convex_margins or {}).items():
+            if not geom_name or margin <= 0:
+                raise ValueError(
+                    "isaaclab_convex_margins requires non-empty geom names "
+                    "and positive margins"
+                )
 
 
 @dataclass

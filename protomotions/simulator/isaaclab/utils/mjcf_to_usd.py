@@ -85,6 +85,7 @@ def build_mjcf_converter_cfg_kwargs(
     fix_base: bool = False,
     merge_mesh: bool = False,
     collision_from_visuals: bool = False,
+    convex_margins: Optional[Mapping[str, float]] = None,
 ) -> Dict[str, Any]:
     """Build kwargs for IsaacLab 3 ``MjcfConverterCfg`` without importing Kit.
 
@@ -99,6 +100,14 @@ def build_mjcf_converter_cfg_kwargs(
         "merge_mesh": bool(merge_mesh),
         "collision_from_visuals": bool(collision_from_visuals),
     }
+    normalized_margins = tuple(
+        sorted(
+            (str(name), float(margin))
+            for name, margin in (convex_margins or {}).items()
+        )
+    )
+    if normalized_margins:
+        options["convex_margins"] = normalized_margins
     resolved_usd_dir = (
         _absolute_path(usd_dir)
         if usd_dir is not None
@@ -127,6 +136,7 @@ def conversion_cache_key(
         bool(cfg_kwargs.get("fix_base", False)),
         bool(cfg_kwargs.get("merge_mesh", False)),
         bool(cfg_kwargs.get("collision_from_visuals", False)),
+        tuple(cfg_kwargs.get("convex_margins", ())),
         (
             _mjcf_fingerprint(str(cfg_kwargs["asset_path"]))
             if include_source_fingerprint
@@ -235,6 +245,54 @@ def _publish_completed_conversion(marker_path: Path, usd_path: str) -> None:
     os.replace(temporary_marker, marker_path)
 
 
+def _apply_convex_margins(
+    usd_path: str, convex_margins: Mapping[str, float]
+) -> None:
+    """Round named USD cylinders while preserving their outer dimensions."""
+    from pxr import Sdf, Usd, UsdGeom
+
+    stage = Usd.Stage.Open(usd_path)
+    if stage is None:
+        raise RuntimeError(f"Failed to open converted robot USD: {usd_path}")
+    stage.SetEditTarget(stage.GetRootLayer())
+
+    remaining = dict(convex_margins)
+    for prim in stage.Traverse():
+        margin = remaining.get(prim.GetName())
+        if margin is None:
+            continue
+        if not prim.IsA(UsdGeom.Cylinder):
+            raise RuntimeError(
+                f"Expected {prim.GetPath()} to be a USD Cylinder, "
+                f"got {prim.GetTypeName()}"
+            )
+        cylinder = UsdGeom.Cylinder(prim)
+        radius = cylinder.GetRadiusAttr().Get()
+        height = cylinder.GetHeightAttr().Get()
+        if radius is None or height is None:
+            raise RuntimeError(f"Cylinder dimensions are missing on {prim.GetPath()}")
+        if margin >= radius or 2 * margin >= height:
+            raise ValueError(
+                f"Convex margin {margin} is too large for {prim.GetPath()} "
+                f"with radius {radius} and height {height}"
+            )
+
+        # PhysX adds the margin outside the cylinder core. Shrinking the core
+        # first keeps the final radius and width equal to the authored MJCF.
+        cylinder.GetRadiusAttr().Set(radius - margin)
+        cylinder.GetHeightAttr().Set(height - 2 * margin)
+        prim.CreateAttribute(
+            "physxConvexGeometry:margin", Sdf.ValueTypeNames.Float
+        ).Set(margin)
+        del remaining[prim.GetName()]
+
+    if remaining:
+        raise RuntimeError(
+            f"Converted USD is missing collision cylinders: {sorted(remaining)}"
+        )
+    stage.GetRootLayer().Save()
+
+
 def default_mjcf_converter_factory(**cfg_kwargs: Any) -> str:
     """Run IsaacLab ``MjcfConverter`` and return the generated USD path.
 
@@ -256,8 +314,12 @@ def default_mjcf_converter_factory(**cfg_kwargs: Any) -> str:
 
     install_isaaclab_mjcf_d6_workaround()
 
+    convex_margins = dict(cfg_kwargs.pop("convex_margins", ()))
     converter = MjcfConverter(MjcfConverterCfg(**cfg_kwargs))
-    return _absolute_path(converter.usd_path)
+    usd_path = _absolute_path(converter.usd_path)
+    if convex_margins:
+        _apply_convex_margins(usd_path, convex_margins)
+    return usd_path
 
 
 def dry_run_mjcf_converter_factory(**cfg_kwargs: Any) -> str:
@@ -278,6 +340,7 @@ def convert_mjcf_to_usd(
     fix_base: bool = False,
     merge_mesh: bool = False,
     collision_from_visuals: bool = False,
+    convex_margins: Optional[Mapping[str, float]] = None,
 ) -> str:
     """Convert MJCF to USD via IsaacLab 3 APIs, with process-local caching.
 
@@ -294,6 +357,7 @@ def convert_mjcf_to_usd(
         fix_base: Forwarded to ``MjcfConverterCfg``.
         merge_mesh: Forwarded to ``MjcfConverterCfg``.
         collision_from_visuals: Forwarded to ``MjcfConverterCfg``.
+        convex_margins: PhysX convex margins keyed by converted USD cylinder name.
 
     Returns:
         Absolute path to the generated (or predicted) USD file.
@@ -307,6 +371,7 @@ def convert_mjcf_to_usd(
         fix_base=fix_base,
         merge_mesh=merge_mesh,
         collision_from_visuals=collision_from_visuals,
+        convex_margins=convex_margins,
     )
     key = conversion_cache_key(
         cfg_kwargs,
@@ -378,6 +443,7 @@ def convert_robot_mjcf_to_usd(
         fix_base=bool(asset.fix_base_link) if fix_base is None else fix_base,
         merge_mesh=merge_mesh,
         collision_from_visuals=collision_from_visuals,
+        convex_margins=getattr(asset, "isaaclab_convex_margins", None),
     )
 
 

@@ -88,25 +88,25 @@
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="left_wheel_1_joint" axis="0 1 0" limited="false" />
                                         <geom name="left_wheel_1_visual" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="left_wheel_1_collision" type="cylinder" size="0.031 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="left_wheel_1_collision" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="left_wheel_2_link" pos="0.06611 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="left_wheel_2_joint" axis="0 1 0" limited="false" />
                                         <geom name="left_wheel_2_visual" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="left_wheel_2_collision" type="cylinder" size="0.032 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="left_wheel_2_collision" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="left_wheel_3_link" pos="-0.00189 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="left_wheel_3_joint" axis="0 1 0" limited="false" />
                                         <geom name="left_wheel_3_visual" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="left_wheel_3_collision" type="cylinder" size="0.032 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="left_wheel_3_collision" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="left_wheel_4_link" pos="-0.06989 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="left_wheel_4_joint" axis="0 1 0" limited="false" />
                                         <geom name="left_wheel_4_visual" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="left_wheel_4_collision" type="cylinder" size="0.031 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="left_wheel_4_collision" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                 </body>
                             </body>
@@ -145,25 +145,25 @@
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="right_wheel_1_joint" axis="0 1 0" limited="false" />
                                         <geom name="right_wheel_1_visual" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="right_wheel_1_collision" type="cylinder" size="0.031 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="right_wheel_1_collision" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="right_wheel_2_link" pos="0.06611 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="right_wheel_2_joint" axis="0 1 0" limited="false" />
                                         <geom name="right_wheel_2_visual" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="right_wheel_2_collision" type="cylinder" size="0.032 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="right_wheel_2_collision" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="right_wheel_3_link" pos="-0.00189 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="right_wheel_3_joint" axis="0 1 0" limited="false" />
                                         <geom name="right_wheel_3_visual" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="right_wheel_3_collision" type="cylinder" size="0.032 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="right_wheel_3_collision" type="cylinder" size="0.032 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                     <body name="right_wheel_4_link" pos="-0.06989 0 -0.08549">
                                         <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.078" diaginertia="3.3364e-05 1.9821e-05 1.9821e-05" />
                                         <joint name="right_wheel_4_joint" axis="0 1 0" limited="false" />
                                         <geom name="right_wheel_4_visual" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" material="wheel" contype="0" conaffinity="0" group="1" density="0" />
-                                        <geom name="right_wheel_4_collision" type="cylinder" size="0.031 0.0025" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
+                                        <geom name="right_wheel_4_collision" type="cylinder" size="0.031 0.012" quat="0.707107 0.707107 0 0" friction="0.8 0.005 0.003" condim="4" contype="1" conaffinity="1" group="3" rgba=".2 .6 .2 .3" density="0" />
                                     </body>
                                 </body>
                             </body>
